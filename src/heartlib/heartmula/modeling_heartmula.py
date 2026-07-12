@@ -168,6 +168,13 @@ class HeartMuLa(PreTrainedModel):
                 dtype,
                 decoder_max_seq_len=self.config.audio_num_codebooks,
             )
+            # Initialize RoPE caches for torchtune 0.4.0+
+            for m in self.modules():
+                if hasattr(m, "rope_init"):
+                    try:
+                        m.rope_init()
+                    except Exception:
+                        pass
 
         self.register_buffer(
             "backbone_causal_mask",

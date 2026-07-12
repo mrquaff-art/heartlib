@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass
 from tqdm import tqdm
 import torchaudio
+import soundfile as sf
 import json
 from contextlib import contextmanager
 import gc
@@ -120,12 +121,12 @@ class HeartMuLaGenPipeline:
             self._mula = HeartMuLa.from_pretrained(
                 self.mula_path,
                 device_map=self.mula_device,
-                dtype=self.mula_dtype,
+                torch_dtype=self.mula_dtype,
             )
             self._codec = HeartCodec.from_pretrained(
                 self.codec_path,
                 device_map=self.codec_device,
-                dtype=self.codec_dtype,
+                torch_dtype=self.codec_dtype,
             )
         self.lazy_load = lazy_load
 
@@ -136,7 +137,7 @@ class HeartMuLaGenPipeline:
         self._mula = HeartMuLa.from_pretrained(
             self.mula_path,
             device_map=self.mula_device,
-            dtype=self.mula_dtype,
+            torch_dtype=self.mula_dtype,
         )
         return self._mula
 
@@ -147,7 +148,7 @@ class HeartMuLaGenPipeline:
         self._codec = HeartCodec.from_pretrained(
             self.codec_path,
             device_map=self.codec_device,
-            dtype=self.codec_dtype,
+            torch_dtype=self.codec_dtype,
         )
         return self._codec
 
@@ -339,7 +340,12 @@ class HeartMuLaGenPipeline:
         frames = model_outputs["frames"].to(self.codec_device)
         wav = self.codec.detokenize(frames)
         self._unload()
-        torchaudio.save(save_path, wav.to(torch.float32).cpu(), 48000)
+        # Use soundfile to save audio (avoids torchcodec dependency in newer torchaudio)
+        wav_np = wav.to(torch.float32).cpu().numpy()
+        # wav shape is (channels, samples) — soundfile expects (samples, channels)
+        if wav_np.ndim == 2:
+            wav_np = wav_np.T
+        sf.write(save_path, wav_np, 48000)
 
     def __call__(self, inputs: Dict[str, Any], **kwargs):
         preprocess_kwargs, forward_kwargs, postprocess_kwargs = (
